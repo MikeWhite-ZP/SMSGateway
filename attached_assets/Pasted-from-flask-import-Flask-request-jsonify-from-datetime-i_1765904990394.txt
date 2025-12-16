@@ -1,0 +1,141 @@
+from flask import Flask, request, jsonify
+from datetime import datetime
+import threading
+import queue
+import secrets
+
+app = Flask(__name__)
+
+# Store connected devices and SMS queue
+connected_devices = {}
+sms_queue = queue.Queue()
+pending_messages = {}
+
+# Simple authentication token (generate your own secure token)
+API_TOKEN = secrets.token_urlsafe(32)
+
+class DeviceConnection:
+    def __init__(self, device_id, phone_number):
+        self.device_id = device_id
+        self.phone_number = phone_number
+        self.last_seen = datetime.now()
+        self.status = "online"
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok", "connected_devices": len(connected_devices)})
+
+@app.route('/device/register', methods=['POST'])
+def register_device():
+    """Android app registers itself with the server"""
+    data = request.json
+    device_id = data.get('device_id')
+    phone_number = data.get('phone_number')
+    
+    if not device_id or not phone_number:
+        return jsonify({"error": "Missing device_id or phone_number"}), 400
+    
+    connected_devices[device_id] = DeviceConnection(device_id, phone_number)
+    
+    return jsonify({
+        "status": "registered",
+        "device_id": device_id,
+        "message": "Device registered successfully"
+    })
+
+@app.route('/device/poll', methods=['POST'])
+def poll_messages():
+    """Android app polls for new messages to send"""
+    data = request.json
+    device_id = data.get('device_id')
+    
+    if not device_id or device_id not in connected_devices:
+        return jsonify({"error": "Device not registered"}), 401
+    
+    # Update last seen
+    connected_devices[device_id].last_seen = datetime.now()
+    
+    # Get pending messages
+    messages = []
+    try:
+        while not sms_queue.empty():
+            msg = sms_queue.get_nowait()
+            msg_id = secrets.token_urlsafe(16)
+            pending_messages[msg_id] = msg
+            messages.append({
+                "id": msg_id,
+                "to": msg["to"],
+                "message": msg["message"]
+            })
+    except queue.Empty:
+        pass
+    
+    return jsonify({"messages": messages})
+
+@app.route('/device/status', methods=['POST'])
+def update_status():
+    """Android app reports delivery status"""
+    data = request.json
+    msg_id = data.get('message_id')
+    status = data.get('status')  # 'sent', 'failed', 'delivered'
+    
+    if msg_id in pending_messages:
+        pending_messages[msg_id]['status'] = status
+        pending_messages[msg_id]['updated_at'] = datetime.now().isoformat()
+    
+    return jsonify({"status": "updated"})
+
+@app.route('/sms/send', methods=['POST'])
+def send_sms():
+    """Booking system sends SMS through this endpoint"""
+    auth_header = request.headers.get('Authorization')
+    
+    # Simple token authentication
+    if auth_header != f"Bearer {API_TOKEN}":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.json
+    to_number = data.get('to')
+    message = data.get('message')
+    
+    if not to_number or not message:
+        return jsonify({"error": "Missing 'to' or 'message' field"}), 400
+    
+    if not connected_devices:
+        return jsonify({"error": "No devices connected"}), 503
+    
+    # Add to queue
+    sms_data = {
+        "to": to_number,
+        "message": message,
+        "created_at": datetime.now().isoformat(),
+        "status": "queued"
+    }
+    sms_queue.put(sms_data)
+    
+    return jsonify({
+        "status": "queued",
+        "message": "SMS queued for delivery"
+    })
+
+@app.route('/devices', methods=['GET'])
+def list_devices():
+    """List all connected devices"""
+    devices = []
+    for device_id, conn in connected_devices.items():
+        devices.append({
+            "device_id": device_id,
+            "phone_number": conn.phone_number,
+            "last_seen": conn.last_seen.isoformat(),
+            "status": conn.status
+        })
+    return jsonify({"devices": devices})
+
+if __name__ == '__main__':
+    print(f"\n{'='*50}")
+    print(f"SMS SERVER STARTED")
+    print(f"{'='*50}")
+    print(f"API Token: {API_TOKEN}")
+    print(f"Save this token for your booking system!")
+    print(f"{'='*50}\n")
+    app.run(host='0.0.0.0', port=5000, debug=True)

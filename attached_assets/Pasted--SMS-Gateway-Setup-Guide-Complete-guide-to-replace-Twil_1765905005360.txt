@@ -1,0 +1,272 @@
+# SMS Gateway Setup Guide
+
+Complete guide to replace Twilio with your own Android phone SMS system.
+
+## 🎯 System Overview
+
+This system consists of:
+1. **SMS Server** - Python Flask API that manages SMS queue
+2. **Android App** - Sends SMS using phone's SIM card
+3. **Booking System Integration** - Python client to send SMS from your booking system
+
+## 📋 Requirements
+
+### Server Requirements
+- Python 3.7+
+- Flask
+- Internet connection
+- Static IP or domain name (recommended)
+
+### Android Phone Requirements
+- Android 5.0 (API 21) or higher
+- Active SIM card with SMS capability
+- Internet connection (WiFi or mobile data)
+- SMS permissions enabled
+
+## 🚀 Installation Steps
+
+### Step 1: Setup SMS Server
+
+1. **Install Python dependencies:**
+```bash
+pip install flask
+```
+
+2. **Run the SMS server:**
+```bash
+python sms_server.py
+```
+
+3. **Save the API token** displayed in the console (you'll need this for your booking system)
+
+4. **Keep server running** or use a process manager like `systemd` or `pm2`
+
+### Step 2: Build Android App
+
+1. **Install Android Studio** from https://developer.android.com/studio
+
+2. **Create new project:**
+   - Open Android Studio
+   - Create new "Empty Activity" project
+   - Package name: `com.smsgateway.app`
+
+3. **Add the files:**
+   - Copy `MainActivity.java` to `app/src/main/java/com/smsgateway/app/`
+   - Copy `activity_main.xml` to `app/src/main/res/layout/`
+   - Copy `AndroidManifest.xml` to `app/src/main/`
+   - Copy `build.gradle` content to `app/build.gradle`
+
+4. **Build APK:**
+   - Build → Build Bundle(s) / APK(s) → Build APK(s)
+   - APK will be in `app/build/outputs/apk/debug/`
+
+5. **Install on Android phone:**
+   - Transfer APK to phone
+   - Enable "Install from Unknown Sources" in settings
+   - Install the APK
+
+### Step 3: Configure Android App
+
+1. **Open the app** on your Android phone
+
+2. **Grant permissions:**
+   - Allow SMS permission when prompted
+   - Allow phone state permission
+
+3. **Enter server URL:**
+   - Format: `http://YOUR_SERVER_IP:5000`
+   - Example: `http://192.168.1.100:5000`
+
+4. **Press "Connect"**
+   - App will register with server
+   - Status should show "Connected"
+
+5. **Keep app running:**
+   - App must stay open to send SMS
+   - Consider disabling battery optimization for this app
+
+### Step 4: Integrate with Booking System
+
+1. **Add the integration code** to your booking system
+
+2. **Configure the client:**
+```python
+from sms_gateway_client import SMSGateway
+
+sms = SMSGateway(
+    server_url="http://YOUR_SERVER_IP:5000",
+    api_token="YOUR_API_TOKEN_FROM_STEP_1"
+)
+```
+
+3. **Send SMS from your booking system:**
+```python
+result = sms.send_sms(
+    to_number="+1234567890",
+    message="Your booking is confirmed!"
+)
+```
+
+## 🔧 Configuration
+
+### Server Configuration
+
+**Change port** (default 5000):
+```python
+app.run(host='0.0.0.0', port=8080)
+```
+
+**Enable HTTPS** (production):
+Use a reverse proxy like Nginx with SSL certificate
+
+### Android App Configuration
+
+**Polling interval** (default 5 seconds):
+```java
+handler.postDelayed(this, 5000); // Change 5000 to desired milliseconds
+```
+
+## 📱 Usage Examples
+
+### Send Booking Confirmation
+```python
+sms.send_sms(
+    to_number="+1234567890",
+    message="Hi John! Your haircut appointment is confirmed for Dec 17 at 2:00 PM."
+)
+```
+
+### Send Reminder
+```python
+sms.send_sms(
+    to_number="+1234567890",
+    message="Reminder: Your appointment is in 1 hour. See you soon!"
+)
+```
+
+### Send Cancellation
+```python
+sms.send_sms(
+    to_number="+1234567890",
+    message="Your appointment has been cancelled. Ref: #12345"
+)
+```
+
+## 🔍 Monitoring
+
+### Check Server Status
+```python
+status = sms.get_server_status()
+print(status)  # {'status': 'ok', 'connected_devices': 1}
+```
+
+### List Connected Devices
+```python
+devices = sms.get_connected_devices()
+print(devices)
+```
+
+### View Server Logs
+Check console output where server is running for:
+- Device connections
+- SMS queue status
+- Delivery reports
+
+## ⚠️ Troubleshooting
+
+### Android App Won't Connect
+- ✓ Check server is running
+- ✓ Verify server URL format (include http://)
+- ✓ Ensure phone can reach server IP
+- ✓ Check firewall settings on server
+- ✓ Verify port 5000 is open
+
+### SMS Not Sending
+- ✓ Check SMS permission granted
+- ✓ Verify SIM card has SMS capability
+- ✓ Check phone has signal
+- ✓ Verify phone number format (international format with +)
+- ✓ Check app is still connected
+
+### Server Returns 503 Error
+- ✓ No devices connected
+- ✓ Restart Android app and reconnect
+
+### API Returns 401 Unauthorized
+- ✓ Check API token is correct
+- ✓ Verify Authorization header format: `Bearer YOUR_TOKEN`
+
+## 🔒 Security Recommendations
+
+1. **Use HTTPS in production** - Set up SSL certificate with Nginx/Apache
+2. **Secure the API token** - Store in environment variables, not code
+3. **Implement rate limiting** - Prevent SMS spam
+4. **Add device authentication** - Require device-specific tokens
+5. **Monitor usage** - Track SMS sent per device/time period
+6. **Firewall rules** - Restrict server access to known IPs
+7. **Keep Android app updated** - Latest security patches
+
+## 💰 Cost Savings
+
+Compared to Twilio:
+- **Twilio**: $0.0079 per SMS (US)
+- **This System**: Only SIM card costs (typically $10-30/month unlimited)
+
+For 1000 SMS/month:
+- Twilio: ~$8/month
+- This system: ~$20/month (unlimited)
+
+**Break-even point**: ~2,500 SMS/month
+
+## 📞 SMS Limits
+
+**Important**: Check your carrier's SMS limits:
+- Most carriers: 100-200 SMS/hour
+- Daily limits: 500-1000 SMS/day
+- Exceeding limits may flag account as spam
+
+For high volume (>1000 SMS/day), consider:
+- Multiple Android phones
+- Business SMS plan from carrier
+- Hybrid approach (this system + Twilio backup)
+
+## 🔄 Production Deployment
+
+### Use Process Manager (Server)
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start server with PM2
+pm2 start sms_server.py --name sms-gateway --interpreter python3
+
+# Auto-restart on system boot
+pm2 startup
+pm2 save
+```
+
+### Use Docker (Server)
+```dockerfile
+FROM python:3.9
+WORKDIR /app
+COPY sms_server.py .
+RUN pip install flask
+CMD ["python", "sms_server.py"]
+```
+
+### Android App Background Service
+For production, convert to a background service so app doesn't need to stay open.
+
+## 📊 Monitoring & Logging
+
+Add logging to track:
+- SMS sent/failed counts
+- Device connection status
+- API request volumes
+- Error rates
+
+## 🎉 You're Ready!
+
+Your SMS gateway system is now set up and ready to replace Twilio. The Android phone will automatically send SMS messages as your booking system requests them.
+
+**Support**: Keep the Android app running and connected for reliable SMS delivery!
