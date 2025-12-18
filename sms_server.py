@@ -45,6 +45,19 @@ def get_available_message(device_id):
             return msg
     return None
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "service": "SMS Gateway",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "queue_status": "/queue/status",
+            "send_sms": "POST /sms/send",
+            "devices": "/devices"
+        }
+    })
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok", "connected_devices": len(connected_devices)})

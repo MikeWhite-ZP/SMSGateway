@@ -15,14 +15,26 @@ This system consists of:
 /
 ├── sms_server.py          # Main Flask API server
 ├── sms_gateway_client.py  # Python client library
+├── Dockerfile             # Docker container configuration
+├── docker-compose.yml     # Coolify/Docker Compose deployment
+├── requirements.txt       # Python dependencies
 ├── android_app/           # Android app source code
 │   └── app/src/main/
 │       ├── java/...       # MainActivity.java
 │       ├── res/layout/    # UI layout
 │       └── AndroidManifest.xml
 ├── SETUP_GUIDE.md         # Complete setup instructions
+├── COOLIFY_DEPLOY.md      # Coolify deployment guide
 └── replit.md              # Project documentation
 ```
+
+## Deployment Options
+
+### Option 1: Coolify (Docker)
+See `COOLIFY_DEPLOY.md` for deploying to your Ubuntu server with Coolify.
+
+### Option 2: Replit
+Use the Replit deployment (autoscale) for cloud hosting.
 
 ## Running the Server
 
