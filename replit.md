@@ -80,3 +80,5 @@ The server runs on port 5000 and displays two tokens on startup:
 - December 16, 2025: Initial project setup with Flask server, Android app, and Python client
 - December 16, 2025: Added device token authentication for security
 - December 16, 2025: Fixed duplicate delivery issue with in_progress flag
+- December 18, 2025: Added Docker/Coolify deployment support
+- December 18, 2025: Fixed Android app bugs - improved error handling for auth failures, server errors, and network timeouts

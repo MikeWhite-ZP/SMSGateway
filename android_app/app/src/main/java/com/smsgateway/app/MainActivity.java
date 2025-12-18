@@ -208,12 +208,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void pollMessages() {
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
                 URL url = new URL(serverUrl + "/device/poll");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + deviceToken);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
                 conn.setDoOutput(true);
 
                 JSONObject json = new JSONObject();
@@ -234,25 +237,37 @@ public class MainActivity extends AppCompatActivity {
                     reader.close();
 
                     JSONObject responseJson = new JSONObject(response.toString());
-                    JSONArray messages = responseJson.getJSONArray("messages");
-
-                    for (int i = 0; i < messages.length(); i++) {
-                        JSONObject msg = messages.getJSONObject(i);
-                        String msgId = msg.getString("id");
-                        String to = msg.getString("to");
-                        String message = msg.getString("message");
-                        sendSMS(msgId, to, message);
+                    if (responseJson.has("messages")) {
+                        JSONArray messages = responseJson.getJSONArray("messages");
+                        for (int i = 0; i < messages.length(); i++) {
+                            JSONObject msg = messages.getJSONObject(i);
+                            String msgId = msg.getString("id");
+                            String to = msg.getString("to");
+                            String message = msg.getString("message");
+                            sendSMS(msgId, to, message);
+                        }
                     }
-                } else if (responseCode == 401) {
+                } else if (responseCode == 401 || responseCode == 403) {
                     runOnUiThread(() -> {
                         isConnected = false;
+                        handler.removeCallbacksAndMessages(null);
                         updateUI();
-                        Toast.makeText(this, "Authentication failed", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Authentication failed - please reconnect", Toast.LENGTH_LONG).show();
+                    });
+                } else if (responseCode >= 500) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Server error: " + responseCode, Toast.LENGTH_SHORT).show();
                     });
                 }
-                conn.disconnect();
             } catch (Exception e) {
                 e.printStackTrace();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Connection error - retrying...", Toast.LENGTH_SHORT).show();
+                });
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
             }
         }).start();
     }
@@ -280,12 +295,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void reportStatus(String msgId, String status) {
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
                 URL url = new URL(serverUrl + "/device/status");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + deviceToken);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
                 conn.setDoOutput(true);
 
                 JSONObject json = new JSONObject();
@@ -296,10 +314,28 @@ public class MainActivity extends AppCompatActivity {
                 os.write(json.toString().getBytes());
                 os.close();
 
-                conn.getResponseCode();
-                conn.disconnect();
+                int responseCode = conn.getResponseCode();
+                if (responseCode == 401 || responseCode == 403) {
+                    runOnUiThread(() -> {
+                        isConnected = false;
+                        handler.removeCallbacksAndMessages(null);
+                        updateUI();
+                        Toast.makeText(this, "Authentication failed - please reconnect", Toast.LENGTH_LONG).show();
+                    });
+                } else if (responseCode >= 500) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Failed to report status: " + responseCode, Toast.LENGTH_SHORT).show();
+                    });
+                }
             } catch (Exception e) {
                 e.printStackTrace();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Error reporting status", Toast.LENGTH_SHORT).show();
+                });
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
             }
         }).start();
     }
